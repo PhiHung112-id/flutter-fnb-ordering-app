@@ -102,14 +102,12 @@ flutter pub get
 
 ### 3. Configure Supabase
 
-In `main.dart`, configure Supabase:
+This project uses Supabase for authentication, database, and storage.
 
-```dart
-await Supabase.initialize(
-  url: 'YOUR_SUPABASE_URL',
-  anonKey: 'YOUR_SUPABASE_ANON_KEY',
-);
-```
+Create a local config file:
+
+```text
+lib/config/supabase_config.dart
 
 ### 4. Run the application
 
