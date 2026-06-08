@@ -11,6 +11,7 @@ import 'providers/app_state.dart';
 import 'utils/app_colors.dart';
 import 'utils/app_globals.dart';
 import 'pages/reset_password_page.dart';
+import 'config/supabase_config.dart';
 
 Future<void> openResetPasswordPage() async {
   isPasswordRecoveryMode = true;
@@ -36,8 +37,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
-    url: 'YOUR_SUPABASE_URL',
-    anonKey: 'YOUR_SUPABASE_ANON_KEY',
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
   );
 
   Supabase.instance.client.auth.onAuthStateChange.listen((data) {
