@@ -108,6 +108,7 @@ Create a local config file:
 
 ```text
 lib/config/supabase_config.dart
+```
 
 ### 4. Run the application
 
