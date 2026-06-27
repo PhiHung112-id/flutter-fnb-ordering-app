@@ -1,4 +1,6 @@
-﻿import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'api_client.dart';
 
 class AddressService {
   final supabase = Supabase.instance.client;
@@ -7,7 +9,7 @@ class AddressService {
     final user = supabase.auth.currentUser;
 
     if (user == null) {
-      throw Exception('Báº¡n cáº§n Ä‘Äƒng nháº­p');
+      throw Exception('Bạn cần đăng nhập');
     }
 
     return user.id;
@@ -15,37 +17,34 @@ class AddressService {
 
   Future<List<String>> getAddresses() async {
     final userId = getCurrentUserId();
+    final data = await ApiClient.getList('/api/customers/$userId/addresses');
 
-    final data = await supabase
-        .from('addresses')
-        .select()
-        .eq('user_id', userId)
-        .order('id', ascending: false);
-
-    return List<Map<String, dynamic>>.from(data).map((item) {
-      return item['address'].toString();
-    }).toList();
+    return data
+        .map((item) => item['address']?.toString() ?? '')
+        .where((address) => address.trim().isNotEmpty)
+        .toList();
   }
 
   Future<void> addAddress(String address) async {
     final userId = getCurrentUserId();
 
-    await supabase.from('addresses').insert({
-      'user_id': userId,
-      'title': 'Äá»‹a chá»‰ giao hÃ ng',
-      'address': address,
-    });
+    await ApiClient.post(
+      '/api/customers/$userId/addresses',
+      body: {
+        'title': 'Địa chỉ giao hàng',
+        'address': address.trim(),
+      },
+    );
   }
 
   Future<void> deleteAddressByText(String address) async {
     final userId = getCurrentUserId();
 
-    await supabase
-        .from('addresses')
-        .delete()
-        .eq('user_id', userId)
-        .eq('address', address);
+    await ApiClient.delete(
+      '/api/customers/$userId/addresses',
+      queryParameters: {
+        'address': address.trim(),
+      },
+    );
   }
 }
-
-

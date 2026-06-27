@@ -16,6 +16,7 @@ import 'register_page.dart';
 import 'support_page.dart';
 import 'voucher_page.dart';
 import 'rank_theme_page.dart';
+import 'face_register_page.dart';
 import 'onboarding_page.dart';
 
 class AccountPage extends ConsumerWidget {
@@ -200,10 +201,29 @@ class AccountPage extends ConsumerWidget {
 
     final rank = profile?['rank']?.toString().trim().isNotEmpty == true
         ? profile!['rank'].toString()
-        : 'Member';
+        : profile?['rank_name']?.toString().trim().isNotEmpty == true
+        ? profile!['rank_name'].toString()
+        : profile?['customer_rank']?.toString().trim().isNotEmpty == true
+        ? profile!['customer_rank'].toString()
+        : 'Đồng';
 
-    final points = getIntValue(profile?['points'] ?? 0);
+    final points = getIntValue(
+      profile?['points'] ??
+          profile?['point'] ??
+          profile?['total_points'] ??
+          profile?['reward_points'] ??
+          0,
+    );
+
     final avatarUrl = profile?['avatar_url']?.toString() ?? '';
+
+    final rankData = profile?['rank_data'] is Map
+        ? Map<String, dynamic>.from(profile!['rank_data'])
+        : null;
+
+    final nextRankData = profile?['next_rank_data'] is Map
+        ? Map<String, dynamic>.from(profile!['next_rank_data'])
+        : null;
 
     final selectedPayment = paymentMethods.isEmpty
         ? null
@@ -250,6 +270,8 @@ class AccountPage extends ConsumerWidget {
                 avatarUrl: avatarUrl,
                 firstLetter: getFirstLetter(fullName),
                 compact: true,
+                rankData: rankData,
+                nextRankData: nextRankData,
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -323,6 +345,28 @@ class AccountPage extends ConsumerWidget {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => ProfilePage(),
+                  ),
+                );
+              },
+            ),
+
+
+            _AccountItem(
+              icon: Icons.face_retouching_natural_rounded,
+              title: 'Đăng ký khuôn mặt',
+              subtitle: isLoggedIn
+                  ? 'Chụp và lưu khuôn mặt để xác thực nhanh'
+                  : 'Đăng nhập để đăng ký khuôn mặt',
+              locked: !isLoggedIn,
+              onTap: () {
+                if (!isLoggedIn) {
+                  requireLogin(context);
+                  return;
+                }
+
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => FaceRegisterPage(),
                   ),
                 );
               },
@@ -905,9 +949,8 @@ class _AccountItem extends StatelessWidget {
                     Text(
                       title,
                       style: TextStyle(
-                        color: locked
-                            ? Colors.grey
-                            : AppColors.textPrimary(context),
+                        color:
+                        locked ? Colors.grey : AppColors.textPrimary(context),
                         fontWeight: FontWeight.bold,
                       ),
                     ),

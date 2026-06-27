@@ -9,6 +9,7 @@ import '../utils/format_money.dart';
 import '../widgets/product_card.dart';
 import '../widgets/topping_item_card.dart';
 import 'login_page.dart';
+import 'package:flutter_html/flutter_html.dart';
 
 class ProductDetailPage extends ConsumerStatefulWidget {
   final Map<String, dynamic> product;
@@ -893,14 +894,31 @@ class _ProductInfoCard extends StatelessWidget {
           ),
           if (description.trim().isNotEmpty) ...[
             const SizedBox(height: 14),
-            Text(
-              description,
-              style: TextStyle(
-                color: AppColors.textSecondary(context),
-                height: 1.5,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
+            Html(
+              data: description,
+              style: {
+                "body": Style(
+                  margin: Margins.zero,
+                  padding: HtmlPaddings.zero,
+                  color: AppColors.textSecondary(context),
+                  fontSize: FontSize(15),
+                  fontWeight: FontWeight.w500,
+                  lineHeight: const LineHeight(1.5),
+                ),
+                "p": Style(
+                  margin: Margins.only(bottom: 8),
+                ),
+                "strong": Style(
+                  color: AppColors.textPrimary(context),
+                  fontWeight: FontWeight.w900,
+                ),
+                "ul": Style(
+                  margin: Margins.only(left: 18, bottom: 8),
+                ),
+                "li": Style(
+                  margin: Margins.only(bottom: 4),
+                ),
+              },
             ),
           ],
         ],

@@ -13,6 +13,7 @@ import '../services/favorite_service.dart';
 import '../services/payment_service.dart';
 import '../services/order_service.dart';
 import '../services/banner_service.dart';
+import '../services/rank_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -294,30 +295,7 @@ class OrdersNotifier extends Notifier<List<OrderModel>> {
     loading = true;
 
     try {
-      final data = await OrderService().getMyOrders();
-
-      final orders = data.map((item) {
-        final orderItemsRaw = item['order_items'] as List? ?? [];
-
-        final orderItems = orderItemsRaw.map<Map<String, dynamic>>((orderItem) {
-          return {
-            'productId': orderItem['product_id'],
-            'title': orderItem['product_title'],
-            'thumbnail': orderItem['product_thumbnail'],
-            'price': (orderItem['price'] as num).toDouble(),
-            'qty': (orderItem['qty'] as num).toInt(),
-            'toppings': List<String>.from(orderItem['toppings'] ?? []),
-          };
-        }).toList();
-
-        return OrderModel(
-          id: (item['id'] as num).toInt(),
-          items: orderItems,
-          total: (item['total'] as num).toDouble(),
-          status: item['status'].toString(),
-          createdAt: DateTime.parse(item['created_at'].toString()).toLocal(),
-        );
-      }).toList();
+      final orders = await OrderService().getMyOrders();
 
       state = orders;
     } catch (e) {
@@ -326,6 +304,39 @@ class OrdersNotifier extends Notifier<List<OrderModel>> {
     } finally {
       loading = false;
     }
+  }
+
+  Future<int> createOrder({
+    required String customerName,
+    required String phone,
+    required String address,
+    required String note,
+    required String paymentMethod,
+    String orderType = 'delivery',
+    required double subtotal,
+    required double shippingFee,
+    required double discount,
+    required double total,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final orderId = await OrderService().createOrder(
+      customerName: customerName,
+      phone: phone,
+      address: address,
+      note: note,
+      paymentMethod: paymentMethod,
+      orderType: orderType,
+      subtotal: subtotal,
+      shippingFee: shippingFee,
+      discount: discount,
+      total: total,
+      items: items,
+    );
+
+    await loadOrdersFromSupabase();
+    await ref.read(customerProfileProvider.notifier).loadProfile();
+
+    return orderId;
   }
 
   void addOrder(OrderModel order) {
@@ -351,6 +362,27 @@ class OrdersNotifier extends Notifier<List<OrderModel>> {
     } catch (e) {
       state = oldState;
       print('Lỗi update order status: $e');
+    }
+  }
+
+
+  Future<void> cancelOrder(int orderId) async {
+    final oldState = [...state];
+
+    state = state.map((order) {
+      if (order.id == orderId) {
+        return order.copyWith(status: 'Đã hủy');
+      }
+
+      return order;
+    }).toList();
+
+    try {
+      await OrderService().cancelOrder(orderId: orderId);
+      await loadOrdersFromSupabase();
+    } catch (e) {
+      state = oldState;
+      print('Lỗi hủy đơn: $e');
     }
   }
 
@@ -387,13 +419,85 @@ class CustomerProfileNotifier extends Notifier<Map<String, dynamic>?> {
 
     try {
       final data = await AuthService().getProfile();
-      state = data;
+
+      if (data == null) {
+        state = null;
+        return;
+      }
+
+      final profile = Map<String, dynamic>.from(data);
+
+      final points = getIntValue(
+        profile['points'] ??
+            profile['point'] ??
+            profile['total_points'] ??
+            profile['reward_points'] ??
+            profile['loyalty_points'] ??
+            0,
+      );
+
+      final rankInfo = await RankService().getRankInfoByPoints(points);
+
+      final rankData = getMapValue(rankInfo['rank_data']);
+      final nextRankData = getMapValue(rankInfo['next_rank_data']);
+
+      profile['points'] = points;
+
+      // Dữ liệu rank lấy từ database customer_ranks
+      profile['rank_data'] = rankData;
+      profile['next_rank_data'] = nextRankData;
+
+      // Các field dùng nhanh cho UI
+      profile['rank'] = rankInfo['rank']?.toString() ?? 'Đồng';
+      profile['rank_code'] = rankInfo['rank_code']?.toString() ?? 'bronze';
+      profile['rank_discount'] = getDoubleValue(rankInfo['rank_discount']);
+      profile['rank_progress'] = getDoubleValue(rankInfo['progress']);
+      profile['missing_points'] = getIntValue(rankInfo['missing_points']);
+      profile['next_rank_name'] =
+          rankInfo['next_rank_name']?.toString() ?? 'MAX';
+      profile['next_rank_code'] =
+          rankInfo['next_rank_code']?.toString() ?? '';
+
+      state = profile;
+
+      print('PROFILE LOADED: $profile');
     } catch (e) {
       state = null;
       print('Lỗi load profile: $e');
     } finally {
       loading = false;
     }
+  }
+
+  int getIntValue(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  double getDoubleValue(dynamic value) {
+    if (value == null) return 0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
+
+    return double.tryParse(value.toString()) ?? 0;
+  }
+
+  Map<String, dynamic>? getMapValue(dynamic value) {
+    if (value == null) return null;
+
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+
+    return null;
   }
 
   void clearProfile() {
@@ -409,7 +513,19 @@ NotifierProvider<CustomerProfileNotifier, Map<String, dynamic>?>(
 class LoginNotifier extends Notifier<bool> {
   @override
   bool build() {
-    return AuthService().isLoggedIn;
+    final loggedIn = AuthService().isLoggedIn;
+
+    if (loggedIn) {
+      Future.microtask(() {
+        ref.read(customerProfileProvider.notifier).loadProfile();
+        ref.read(ordersProvider.notifier).loadOrdersFromSupabase();
+        ref.read(favoritesProvider.notifier).loadFavorites();
+        ref.read(savedAddressesProvider.notifier).loadAddresses();
+        ref.read(paymentMethodsProvider.notifier).loadPaymentMethods();
+      });
+    }
+
+    return loggedIn;
   }
 
   Future<void> login({
@@ -422,6 +538,12 @@ class LoginNotifier extends Notifier<bool> {
     );
 
     state = true;
+
+    await ref.read(customerProfileProvider.notifier).loadProfile();
+    await ref.read(ordersProvider.notifier).loadOrdersFromSupabase();
+    await ref.read(favoritesProvider.notifier).loadFavorites();
+    await ref.read(savedAddressesProvider.notifier).loadAddresses();
+    await ref.read(paymentMethodsProvider.notifier).loadPaymentMethods();
   }
 
   Future<void> register({
@@ -438,10 +560,22 @@ class LoginNotifier extends Notifier<bool> {
     );
 
     state = true;
+
+    await ref.read(customerProfileProvider.notifier).loadProfile();
   }
 
   Future<void> logout() async {
     await AuthService().signOut();
+
+    ref.read(customerProfileProvider.notifier).clearProfile();
+    ref.read(ordersProvider.notifier).clearOrders();
+    ref.read(favoritesProvider.notifier).clearFavorites();
+    ref.read(savedAddressesProvider.notifier).clearAddresses();
+    ref.read(paymentMethodsProvider.notifier).clearPaymentMethods();
+    ref.read(cartItemsProvider.notifier).clearCart();
+    ref.read(selectedVoucherProvider.notifier).clearVoucher();
+    ref.read(selectedPaymentProvider.notifier).clearPayment();
+    ref.read(deliveryLocationProvider.notifier).clearLocation();
 
     state = false;
   }
@@ -733,12 +867,22 @@ class PaymentMethodsNotifier extends Notifier<List<PaymentMethod>> {
 
   @override
   List<PaymentMethod> build() {
+    return _defaultMethods();
+  }
+
+  List<PaymentMethod> _defaultMethods() {
     return [
       PaymentMethod(
         id: 'cash',
         type: 'cash',
         title: 'Tiền mặt',
         subtitle: 'Thanh toán khi nhận hàng',
+      ),
+      PaymentMethod(
+        id: 'sepay',
+        type: 'sepay',
+        title: 'SePay VietQR',
+        subtitle: 'Quét mã QR ngân hàng để thanh toán online',
       ),
     ];
   }
@@ -760,17 +904,20 @@ class PaymentMethodsNotifier extends Notifier<List<PaymentMethod>> {
         );
       }).toList();
 
-      state = [
-        PaymentMethod(
-          id: 'cash',
-          type: 'cash',
-          title: 'Tiền mặt',
-          subtitle: 'Thanh toán khi nhận hàng',
-        ),
-        ...methods,
-      ];
+      final merged = <PaymentMethod>[];
+      final seen = <String>{};
+
+      for (final method in [..._defaultMethods(), ...methods]) {
+        final key = method.id.trim().isNotEmpty ? method.id : method.type;
+        if (seen.contains(key)) continue;
+        seen.add(key);
+        merged.add(method);
+      }
+
+      state = merged;
     } catch (e) {
       print('Lỗi load payment methods: $e');
+      state = _defaultMethods();
     } finally {
       loading = false;
     }
@@ -819,7 +966,7 @@ class PaymentMethodsNotifier extends Notifier<List<PaymentMethod>> {
   }
 
   Future<void> removeMethod(String id) async {
-    if (id == 'cash') return;
+    if (id == 'cash' || id == 'sepay') return;
 
     final oldState = [...state];
 
@@ -834,14 +981,7 @@ class PaymentMethodsNotifier extends Notifier<List<PaymentMethod>> {
   }
 
   void clearPaymentMethods() {
-    state = [
-      PaymentMethod(
-        id: 'cash',
-        type: 'cash',
-        title: 'Tiền mặt',
-        subtitle: 'Thanh toán khi nhận hàng',
-      ),
-    ];
+    state = _defaultMethods();
   }
 }
 

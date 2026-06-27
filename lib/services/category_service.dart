@@ -1,21 +1,28 @@
-﻿import 'package:supabase_flutter/supabase_flutter.dart';
+import 'api_client.dart';
 
 class CategoryService {
-  final supabase = Supabase.instance.client;
+  int getIntValue(dynamic value, {int defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? defaultValue;
+  }
 
   Future<List<Map<String, dynamic>>> getCategories() async {
-    final data = await supabase
-        .from('categories')
-        .select('*')
-        .order('id', ascending: true);
+    final data = await ApiClient.getList('/api/categories');
 
-    return List<Map<String, dynamic>>.from(data).map((item) {
+    return data.map((item) {
+      final imageUrl = item['imageUrl']?.toString() ??
+          item['image_url']?.toString() ??
+          '';
+
       return {
-        'id': (item['id'] as num).toInt(),
+        'id': getIntValue(item['id']),
         'name': item['name']?.toString() ?? '',
         'type': item['type']?.toString() ?? '',
         'icon': item['icon']?.toString() ?? '',
-        'image_url': item['image_url']?.toString() ?? '',
+        'imageUrl': imageUrl,
+        'image_url': imageUrl,
       };
     }).toList();
   }

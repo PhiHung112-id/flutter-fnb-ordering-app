@@ -6,11 +6,13 @@ import '../models/cart_item_model.dart';
 import '../models/order_model.dart';
 import '../providers/app_state.dart';
 import '../services/order_service.dart';
+import '../services/payment_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/format_money.dart';
 import 'location_page.dart';
 import 'login_page.dart';
 import 'payment_method_page.dart';
+import 'sepay_qr_page.dart';
 
 class CheckoutPage extends ConsumerStatefulWidget {
   CheckoutPage({super.key});
@@ -21,6 +23,7 @@ class CheckoutPage extends ConsumerStatefulWidget {
 
 class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   String selectedVoucher = 'Không dùng';
+  String receiveMethod = 'delivery';
   bool isPlacingOrder = false;
 
   final noteController = TextEditingController();
@@ -58,6 +61,23 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   double getDoubleValue(dynamic value) {
     if (value is num) return value.toDouble();
     return 0;
+  }
+
+  bool isSePayPayment(PaymentMethod paymentMethod) {
+    final type = paymentMethod.type.toLowerCase().trim();
+    final title = paymentMethod.title.toLowerCase().trim();
+    final subtitle = paymentMethod.subtitle.toLowerCase().trim();
+
+    return type == 'sepay' ||
+        type == 'vietqr' ||
+        type.contains('sepay') ||
+        type.contains('vietqr') ||
+        title.contains('sepay') ||
+        title.contains('vietqr') ||
+        title.contains('qr') ||
+        subtitle.contains('sepay') ||
+        subtitle.contains('vietqr') ||
+        subtitle.contains('qr');
   }
 
   double calculateSubtotal(
@@ -283,9 +303,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       return;
     }
 
-    final deliveryLocation = ref.read(deliveryLocationProvider).trim();
+    final rawDeliveryLocation = ref.read(deliveryLocationProvider).trim();
+    final isDelivery = receiveMethod == 'delivery';
+    final deliveryLocation = isDelivery ? rawDeliveryLocation : 'Nhận tại quán';
 
-    if (deliveryLocation.isEmpty) {
+    if (isDelivery && rawDeliveryLocation.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Vui lòng chọn địa chỉ giao hàng'),
@@ -364,6 +386,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         address: deliveryLocation,
         note: noteController.text.trim(),
         paymentMethod: selectedPaymentMethod.type,
+        orderType: receiveMethod,
         subtotal: subtotal,
         shippingFee: shippingFee,
         discount: discount,
@@ -371,12 +394,79 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         items: orderItems,
       );
 
+      final useSePay = isSePayPayment(selectedPaymentMethod);
+
+      if (useSePay) {
+        final paymentInfo = await PaymentService().getOrderPaymentInfo(orderId);
+
+        if (!mounted) return;
+
+        final qrUrl = paymentInfo?['payment_qr_url']?.toString() ?? '';
+        final paymentCode = paymentInfo?['payment_code']?.toString() ?? '';
+
+        if (qrUrl.isEmpty || paymentCode.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Không tạo được mã QR thanh toán'),
+            ),
+          );
+          return;
+        }
+
+        final paid = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => SePayQrPage(
+              orderId: orderId,
+              amount: total,
+              paymentCode: paymentCode,
+              qrUrl: qrUrl,
+            ),
+          ),
+        );
+
+        if (!mounted) return;
+
+        if (paid == true) {
+          final order = OrderModel(
+            id: orderId,
+            items: orderItems,
+            total: total,
+            status: 'Chờ xác nhận',
+            createdAt: DateTime.now(),
+            paymentMethod: 'SePay VietQR',
+          );
+
+          ref.read(ordersProvider.notifier).addOrder(order);
+          ref.read(cartItemsProvider.notifier).clearCart();
+          ref.read(selectedVoucherProvider.notifier).clearVoucher();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Thanh toán thành công! Đơn hàng đã được ghi nhận.'),
+            ),
+          );
+
+          Navigator.pop(context);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Đơn hàng đã tạo nhưng chưa thanh toán. Vui lòng quét QR để hoàn tất.',
+              ),
+            ),
+          );
+        }
+
+        return;
+      }
+
       final order = OrderModel(
         id: orderId,
         items: orderItems,
         total: total,
-        status: 'Đang xử lý',
+        status: 'Chờ xác nhận',
         createdAt: DateTime.now(),
+        paymentMethod: selectedPaymentMethod.type,
       );
 
       ref.read(ordersProvider.notifier).addOrder(order);
@@ -388,7 +478,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Đặt hàng thành công! Điểm sẽ được cộng khi đơn hoàn thành.',
+            'Đặt hàng thành công! Vui lòng thanh toán khi nhận hàng.',
           ),
         ),
       );
@@ -452,9 +542,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
-
                   SizedBox(height: 18),
-
                   Text(
                     'Chọn voucher',
                     style: TextStyle(
@@ -463,9 +551,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                       color: AppColors.textPrimary(bottomSheetContext),
                     ),
                   ),
-
                   SizedBox(height: 6),
-
                   Text(
                     'Tạm tính đơn hàng: ${formatMoney(subtotal)}',
                     style: TextStyle(
@@ -473,9 +559,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-
                   SizedBox(height: 14),
-
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -506,8 +590,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                             decoration: InputDecoration(
                               hintText: 'Nhập mã voucher',
                               hintStyle: TextStyle(
-                                color:
-                                AppColors.textSecondary(bottomSheetContext),
+                                color: AppColors.textSecondary(
+                                  bottomSheetContext,
+                                ),
                               ),
                               prefixIcon: Icon(
                                 Icons.confirmation_number_outlined,
@@ -535,9 +620,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                             ),
                           ),
                         ),
-
                         SizedBox(width: 10),
-
                         Container(
                           decoration: BoxDecoration(
                             gradient: AppColors.primaryGradient(
@@ -579,9 +662,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                       ],
                     ),
                   ),
-
                   SizedBox(height: 14),
-
                   Flexible(
                     child: ListView(
                       shrinkWrap: true,
@@ -605,7 +686,6 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                             Navigator.pop(bottomSheetContext);
                           },
                         ),
-
                         if (vouchers.isEmpty)
                           Padding(
                             padding: const EdgeInsets.all(16),
@@ -704,12 +784,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       orElse: () => paymentMethods.first,
     );
 
+    final useSePay = isSePayPayment(selectedPaymentMethod);
+
     if (selectedVoucher != selectedVoucherFromProvider) {
       selectedVoucher = selectedVoucherFromProvider;
     }
 
     final subtotal = calculateSubtotal(products, cartItems);
-    const shippingFee = 15000.0;
+    final shippingFee = receiveMethod == 'delivery' ? 15000.0 : 0.0;
 
     final voucherValid = isSelectedVoucherValid(
       subtotal: subtotal,
@@ -759,20 +841,36 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           : ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _SectionTitle(title: 'Địa chỉ giao hàng'),
+          _SectionTitle(title: 'Hình thức nhận món'),
+          _ReceiveMethodBox(
+            selectedMethod: receiveMethod,
+            onChanged: (value) {
+              setState(() {
+                receiveMethod = value;
+              });
+            },
+          ),
+          SizedBox(height: 14),
+          _SectionTitle(
+            title: receiveMethod == 'delivery'
+                ? 'Địa chỉ giao hàng'
+                : 'Nhận tại quán',
+          ),
           _AddressBox(
-            address: deliveryLocation,
-            onTap: () {
+            address: receiveMethod == 'delivery'
+                ? deliveryLocation
+                : 'Khách tự đến quầy nhận món',
+            onTap: receiveMethod == 'delivery'
+                ? () {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => LocationPage(),
                 ),
               );
-            },
+            }
+                : () {},
           ),
-
           SizedBox(height: 18),
-
           _SectionTitle(title: 'Món đã chọn'),
           ...cartItems.map((cartItem) {
             final product = findProductById(products, cartItem.id);
@@ -790,9 +888,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               toppings: cartItem.toppings,
             );
           }),
-
           SizedBox(height: 18),
-
           _SectionTitle(title: 'Voucher'),
           _VoucherBox(
             title: getVoucherTitle(vouchers),
@@ -803,7 +899,6 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               subtotal: subtotal,
             ),
           ),
-
           if (!voucherValid && selectedVoucher != 'Không dùng') ...[
             SizedBox(height: 8),
             Text(
@@ -815,9 +910,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               ),
             ),
           ],
-
           SizedBox(height: 18),
-
           _SectionTitle(title: 'Phương thức thanh toán'),
           _PaymentMethodBox(
             title: selectedPaymentMethod.title,
@@ -831,9 +924,42 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               );
             },
           ),
-
+          if (useSePay) ...[
+            SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.teal.withOpacity(
+                  AppColors.isDark(context) ? 0.18 : 0.10,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.teal.withOpacity(0.28),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.qr_code_2_rounded,
+                    color: Colors.teal,
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Bạn sẽ quét mã QR và chuyển khoản trước. Đơn hàng chỉ thành công sau khi hệ thống xác nhận đã thanh toán.',
+                      style: TextStyle(
+                        color: AppColors.textPrimary(context),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           SizedBox(height: 18),
-
           _SectionTitle(title: 'Ghi chú đơn hàng'),
           TextField(
             controller: noteController,
@@ -864,9 +990,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               ),
             ),
           ),
-
           SizedBox(height: 18),
-
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -920,7 +1044,6 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               ],
             ),
           ),
-
           SizedBox(height: 90),
         ],
       ),
@@ -949,9 +1072,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           top: false,
           child: Container(
             decoration: BoxDecoration(
-              gradient: isPlacingOrder
-                  ? null
-                  : AppColors.primaryGradient(context),
+              gradient:
+              isPlacingOrder ? null : AppColors.primaryGradient(context),
               color: isPlacingOrder ? Colors.grey.shade600 : null,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
@@ -963,7 +1085,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   ),
               ],
             ),
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
               onPressed: isPlacingOrder
                   ? null
                   : () {
@@ -978,18 +1100,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   selectedPaymentMethod: selectedPaymentMethod,
                 );
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                elevation: 0,
-                minimumSize: Size(double.infinity, 56),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+              icon: isPlacingOrder
+                  ? SizedBox.shrink()
+                  : Icon(
+                useSePay
+                    ? Icons.qr_code_2_rounded
+                    : Icons.check_circle_outline,
               ),
-              child: isPlacingOrder
+              label: isPlacingOrder
                   ? SizedBox(
                 width: 22,
                 height: 22,
@@ -999,10 +1117,23 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 ),
               )
                   : Text(
-                'Xác nhận đặt hàng',
+                useSePay
+                    ? 'Tạo đơn và thanh toán QR'
+                    : 'Xác nhận đặt hàng',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                elevation: 0,
+                minimumSize: Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
             ),
@@ -1032,6 +1163,95 @@ class _SectionTitle extends StatelessWidget {
           fontWeight: FontWeight.bold,
         ),
       ),
+    );
+  }
+}
+
+
+class _ReceiveMethodBox extends StatelessWidget {
+  final String selectedMethod;
+  final ValueChanged<String> onChanged;
+
+  const _ReceiveMethodBox({
+    required this.selectedMethod,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+
+    Widget option({
+      required String value,
+      required IconData icon,
+      required String title,
+      required String subtitle,
+    }) {
+      final selected = selectedMethod == value;
+
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => onChanged(value),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: selected
+                  ? primary.withOpacity(AppColors.isDark(context) ? 0.22 : 0.12)
+                  : AppColors.card(context),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected ? primary : AppColors.border(context),
+                width: selected ? 1.4 : 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  icon,
+                  color: selected ? primary : AppColors.textSecondary(context),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: AppColors.textPrimary(context),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textSecondary(context),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        option(
+          value: 'delivery',
+          icon: Icons.delivery_dining_rounded,
+          title: 'Giao hàng',
+          subtitle: 'Giao đến địa chỉ',
+        ),
+        const SizedBox(width: 12),
+        option(
+          value: 'pickup',
+          icon: Icons.storefront_rounded,
+          title: 'Tự đến lấy',
+          subtitle: 'Không tính phí ship',
+        ),
+      ],
     );
   }
 }
@@ -1450,11 +1670,19 @@ class _PaymentMethodBox extends StatelessWidget {
   });
 
   IconData getIcon() {
-    switch (type) {
+    final value = type.toLowerCase().trim();
+
+    if (value.contains('sepay') || value.contains('vietqr') || value == 'qr') {
+      return Icons.qr_code_2_rounded;
+    }
+
+    switch (value) {
       case 'wallet':
         return Icons.account_balance_wallet_outlined;
       case 'visa':
         return Icons.credit_card;
+      case 'cash':
+        return Icons.payments_outlined;
       default:
         return Icons.payments_outlined;
     }
@@ -1462,12 +1690,19 @@ class _PaymentMethodBox extends StatelessWidget {
 
   Color getColor(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final value = type.toLowerCase().trim();
 
-    switch (type) {
+    if (value.contains('sepay') || value.contains('vietqr') || value == 'qr') {
+      return Colors.teal;
+    }
+
+    switch (value) {
       case 'wallet':
         return Colors.purple;
       case 'visa':
         return Colors.blue;
+      case 'cash':
+        return Colors.green;
       default:
         return primary;
     }

@@ -1,4 +1,6 @@
-﻿import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'api_client.dart';
 
 class FavoriteService {
   final supabase = Supabase.instance.client;
@@ -7,42 +9,46 @@ class FavoriteService {
     final user = supabase.auth.currentUser;
 
     if (user == null) {
-      throw Exception('Báº¡n cáº§n Ä‘Äƒng nháº­p');
+      throw Exception('Bạn cần đăng nhập');
     }
 
     return user.id;
   }
 
+  int getIntValue(dynamic value, {int defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? defaultValue;
+  }
+
   Future<List<int>> getFavorites() async {
     final userId = getCurrentUserId();
+    final data = await ApiClient.getList('/api/customers/$userId/favorites');
 
-    final data = await supabase
-        .from('favorites')
-        .select('product_id')
-        .eq('user_id', userId);
-
-    return List<Map<String, dynamic>>.from(data).map((item) {
-      return (item['product_id'] as num).toInt();
-    }).toList();
+    return data
+        .map((item) => getIntValue(item['product_id'] ?? item['productId']))
+        .where((id) => id > 0)
+        .toList();
   }
 
   Future<void> addFavorite(int productId) async {
     final userId = getCurrentUserId();
 
-    await supabase.from('favorites').upsert({
-      'user_id': userId,
-      'product_id': productId,
-    });
+    await ApiClient.post(
+      '/api/customers/$userId/favorites',
+      body: {
+        'productId': productId,
+      },
+    );
   }
 
   Future<void> removeFavorite(int productId) async {
     final userId = getCurrentUserId();
 
-    await supabase
-        .from('favorites')
-        .delete()
-        .eq('user_id', userId)
-        .eq('product_id', productId);
+    await ApiClient.delete(
+      '/api/customers/$userId/favorites/$productId',
+    );
   }
 
   Future<void> toggleFavorite({
@@ -56,5 +62,3 @@ class FavoriteService {
     }
   }
 }
-
-

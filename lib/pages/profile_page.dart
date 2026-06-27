@@ -203,8 +203,20 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   Widget build(BuildContext context) {
     final profile = ref.watch(customerProfileProvider);
 
-    final rank = profile?['rank']?.toString() ?? 'Member';
     final points = getIntValue(profile?['points'] ?? 0);
+
+    final rank = profile?['rank']?.toString().trim().isNotEmpty == true
+        ? profile!['rank'].toString()
+        : 'Đồng';
+
+    final rankData = profile?['rank_data'] is Map
+        ? Map<String, dynamic>.from(profile!['rank_data'])
+        : null;
+
+    final nextRankData = profile?['next_rank_data'] is Map
+        ? Map<String, dynamic>.from(profile!['next_rank_data'])
+        : null;
+
     final avatarUrl = profile?['avatar_url']?.toString() ?? '';
 
     final displayName = nameController.text.trim().isEmpty
@@ -252,6 +264,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               avatarUrl: avatarUrl,
               firstLetter: getFirstLetter(displayName),
               compact: false,
+              rankData: rankData,
+              nextRankData: nextRankData,
               onAvatarTap: isSaving ? null : changeAvatar,
             ),
 

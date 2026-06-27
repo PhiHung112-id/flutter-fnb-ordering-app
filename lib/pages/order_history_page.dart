@@ -24,9 +24,17 @@ class OrderHistoryPage extends ConsumerWidget {
 
   Color getStatusColor(String status, BuildContext context) {
     switch (status) {
+      case 'Chờ xác nhận':
+      case 'Chờ thanh toán':
+      case 'Chờ nhận làm':
+      case 'Chờ xác nhận':
+      case 'Chờ thanh toán':
+      case 'Chờ nhận làm':
       case 'Đang xử lý':
         return Theme.of(context).colorScheme.primary;
+      case 'Đã thanh toán':
       case 'Đang chuẩn bị':
+      case 'Đang làm':
         return Colors.purple;
       case 'Đang giao':
         return Colors.blue;
@@ -41,9 +49,17 @@ class OrderHistoryPage extends ConsumerWidget {
 
   IconData getStatusIcon(String status) {
     switch (status) {
+      case 'Chờ xác nhận':
+      case 'Chờ thanh toán':
+      case 'Chờ nhận làm':
+      case 'Chờ xác nhận':
+      case 'Chờ thanh toán':
+      case 'Chờ nhận làm':
       case 'Đang xử lý':
         return Icons.hourglass_top_rounded;
+      case 'Đã thanh toán':
       case 'Đang chuẩn bị':
+      case 'Đang làm':
         return Icons.restaurant_menu_rounded;
       case 'Đang giao':
         return Icons.delivery_dining_rounded;

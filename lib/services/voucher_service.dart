@@ -1,33 +1,27 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'api_client.dart';
 
 class VoucherService {
-  final supabase = Supabase.instance.client;
+  double getDoubleValue(dynamic value, {double defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString()) ?? defaultValue;
+  }
 
   Future<List<Map<String, dynamic>>> getVouchers() async {
-    print('Bắt đầu gọi bảng vouchers...');
+    final data = await ApiClient.getList('/api/vouchers');
 
-    final data = await supabase
-        .from('vouchers')
-        .select()
-        .eq('is_active', true)
-        .order('id', ascending: true);
-
-    print('Raw vouchers Supabase: $data');
-
-    final vouchers = List<Map<String, dynamic>>.from(data).map((item) {
+    return data.map((item) {
       return {
         'id': item['id'],
         'code': item['code']?.toString() ?? '',
         'title': item['title']?.toString() ?? '',
         'description': item['description']?.toString() ?? '',
-        'discount': (item['discount'] as num?)?.toDouble() ?? 0,
-        'minOrder': (item['min_order'] as num?)?.toDouble() ?? 0,
-        'isActive': item['is_active'] == true,
+        'discount': getDoubleValue(item['discount']),
+        'minOrder': getDoubleValue(item['minOrder'] ?? item['min_order']),
+        'min_order': getDoubleValue(item['minOrder'] ?? item['min_order']),
+        'isActive': item['isActive'] == true || item['is_active'] == true,
+        'is_active': item['isActive'] == true || item['is_active'] == true,
       };
     }).toList();
-
-    print('Load xong vouchers từ Supabase: ${vouchers.length}');
-
-    return vouchers;
   }
 }

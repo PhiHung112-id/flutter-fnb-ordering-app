@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
 import '../utils/app_colors.dart';
-import '../widgets/app_logo.dart';
 import '../widgets/category_list.dart';
+import '../widgets/premium_rank_card.dart';
 import '../widgets/products_list.dart';
 import 'location_page.dart';
 import 'notification_page.dart';
@@ -29,6 +29,14 @@ class HomePage extends ConsumerWidget {
     return int.tryParse(value?.toString() ?? '0') ?? 0;
   }
 
+  Map<String, dynamic>? getRankData(dynamic value) {
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final deliveryLocation = ref.watch(deliveryLocationProvider);
@@ -43,10 +51,24 @@ class HomePage extends ConsumerWidget {
     final customerRank =
     profile?['rank']?.toString().trim().isNotEmpty == true
         ? profile!['rank'].toString()
+        : profile?['rank_name']?.toString().trim().isNotEmpty == true
+        ? profile!['rank_name'].toString()
+        : profile?['customer_rank']?.toString().trim().isNotEmpty ==
+        true
+        ? profile!['customer_rank'].toString()
         : 'Member';
 
-    final customerPoints = getIntValue(profile?['points']);
+    final customerPoints = getIntValue(
+      profile?['points'] ??
+          profile?['point'] ??
+          profile?['total_points'] ??
+          profile?['reward_points'] ??
+          0,
+    );
+
     final avatarUrl = profile?['avatar_url']?.toString() ?? '';
+
+    final rankData = getRankData(profile?['rank_data']);
 
     return Scaffold(
       backgroundColor: AppColors.background(context),
@@ -77,6 +99,7 @@ class HomePage extends ConsumerWidget {
                   customerPoints: customerPoints,
                   avatarUrl: avatarUrl,
                   isLoggedIn: isLoggedIn,
+                  rankData: rankData,
                   onLocationTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -90,25 +113,25 @@ class HomePage extends ConsumerWidget {
               SliverToBoxAdapter(
                 child: Column(
                   children: [
-                    SizedBox(height: 22),
+                    const SizedBox(height: 22),
                     _PromoBannerSlider(),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     _SectionHeader(
                       title: 'Danh mục',
                       actionText: 'Từ hệ thống',
                     ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     CategoryList(),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     _SectionHeader(
                       title: 'Món nổi bật',
                       actionText: 'Xem tất cả',
                     ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     _FoodFilterChips(),
-                    SizedBox(height: 14),
+                    const SizedBox(height: 14),
                     ProductsList(),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -127,6 +150,7 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   final int customerPoints;
   final String avatarUrl;
   final bool isLoggedIn;
+  final Map<String, dynamic>? rankData;
   final VoidCallback onLocationTap;
   final VoidCallback onNotificationTap;
 
@@ -137,6 +161,7 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.customerPoints,
     required this.avatarUrl,
     required this.isLoggedIn,
+    required this.rankData,
     required this.onLocationTap,
     required this.onNotificationTap,
   });
@@ -201,7 +226,7 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
           BoxShadow(
             color: AppColors.primaryShadow(context),
             blurRadius: 16,
-            offset: Offset(0, 7),
+            offset: const Offset(0, 7),
           ),
         ],
       ),
@@ -224,7 +249,6 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                 ),
               ),
             ),
-
             Positioned(
               bottom: -48,
               left: -38,
@@ -237,7 +261,6 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                 ),
               ),
             ),
-
             Positioned(
               left: 20,
               right: 20,
@@ -249,7 +272,6 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                 onNotificationTap: onNotificationTap,
               ),
             ),
-
             if (brandOpacity > 0)
               Positioned(
                 left: 20,
@@ -262,12 +284,13 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                     opacity: brandOpacity,
                     child: Transform.translate(
                       offset: Offset(0, -progress * 6),
-                      child: _PremiumHomeBrand(
+                      child: PremiumRankCard(
                         customerName: customerName,
                         customerRank: customerRank,
                         customerPoints: customerPoints,
                         avatarUrl: avatarUrl,
                         isLoggedIn: isLoggedIn,
+                        rankData: rankData,
                       ),
                     ),
                   ),
@@ -286,472 +309,8 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
         oldDelegate.customerRank != customerRank ||
         oldDelegate.customerPoints != customerPoints ||
         oldDelegate.avatarUrl != avatarUrl ||
-        oldDelegate.isLoggedIn != isLoggedIn;
-  }
-}
-
-class _PremiumHomeBrand extends StatelessWidget {
-  final String customerName;
-  final String customerRank;
-  final int customerPoints;
-  final String avatarUrl;
-  final bool isLoggedIn;
-
-  _PremiumHomeBrand({
-    required this.customerName,
-    required this.customerRank,
-    required this.customerPoints,
-    required this.avatarUrl,
-    required this.isLoggedIn,
-  });
-
-  IconData getRankIcon(String rank) {
-    switch (rank.toLowerCase()) {
-      case 'diamond':
-        return Icons.diamond_rounded;
-      case 'gold':
-        return Icons.workspace_premium_rounded;
-      case 'silver':
-        return Icons.military_tech_rounded;
-      default:
-        return Icons.local_cafe_rounded;
-    }
-  }
-
-  String getRankText(String rank) {
-    switch (rank.toLowerCase()) {
-      case 'diamond':
-        return 'Diamond';
-      case 'gold':
-        return 'Gold';
-      case 'silver':
-        return 'Silver';
-      default:
-        return 'Member';
-    }
-  }
-
-  String getRankSubtitle(String rank) {
-    switch (rank.toLowerCase()) {
-      case 'diamond':
-        return 'Crystal Elite Member';
-      case 'gold':
-        return 'Premium Gold Member';
-      case 'silver':
-        return 'Silver Reward Member';
-      default:
-        return 'Starter Reward Member';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = AppColors.isDark(context);
-
-    final rankColor = AppColors.rankMainColor(customerRank);
-    final rankDarkColor = AppColors.rankDarkColor(customerRank);
-    final rankLightColor = AppColors.rankLightColor(customerRank);
-    final rankIcon = getRankIcon(customerRank);
-    final rankText = getRankText(customerRank);
-    final rankSubtitle = getRankSubtitle(customerRank);
-    final hasAvatar = avatarUrl.trim().isNotEmpty;
-
-    return Container(
-      height: 120,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        gradient: AppColors.metalBorderGradientByRank(customerRank),
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: rankColor.withOpacity(isDark ? 0.36 : 0.30),
-            blurRadius: 26,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(29),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: AppColors.metalCardGradientByRank(
-              context,
-              customerRank,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _HomeCardPatternPainter(
-                    color: rankColor,
-                    isDark: isDark,
-                  ),
-                ),
-              ),
-
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: AppColors.metalGlassOverlay(),
-                  ),
-                ),
-              ),
-
-              Positioned(
-                right: -30,
-                top: -38,
-                child: Icon(
-                  rankIcon,
-                  size: 126,
-                  color: Colors.white.withOpacity(isDark ? 0.08 : 0.16),
-                ),
-              ),
-
-              Positioned(
-                right: 14,
-                bottom: -32,
-                child: Container(
-                  width: 112,
-                  height: 112,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.20),
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-
-              Positioned(
-                left: -22,
-                bottom: -28,
-                child: Container(
-                  width: 86,
-                  height: 86,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.12),
-                  ),
-                ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.fromLTRB(13, 10, 13, 10),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 68,
-                      height: 68,
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: SweepGradient(
-                          colors: [
-                            rankColor,
-                            rankLightColor,
-                            rankDarkColor,
-                            Colors.white,
-                            rankColor,
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: rankColor.withOpacity(0.35),
-                            blurRadius: 16,
-                            offset: Offset(0, 7),
-                          ),
-                        ],
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.blackCard : Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: ClipOval(
-                          child: hasAvatar
-                              ? CachedNetworkImage(
-                            imageUrl: avatarUrl,
-                            fit: BoxFit.cover,
-                            errorWidget: (_, __, ___) {
-                              return AppLogo(
-                                size: 54,
-                                showText: false,
-                              );
-                            },
-                          )
-                              : AppLogo(
-                            size: 54,
-                            showText: false,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    SizedBox(width: 13),
-
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                isLoggedIn ? 'Xin chào,' : 'Chào mừng,',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.84),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1,
-                                ),
-                              ),
-                              SizedBox(width: 6),
-                              Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: rankLightColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          SizedBox(height: 5),
-
-                          Text(
-                            customerName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.2,
-                              height: 1.05,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black.withOpacity(0.35),
-                                  offset: Offset(0, 1),
-                                  blurRadius: 4,
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          SizedBox(height: 5),
-
-                          Text(
-                            rankSubtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.78),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              height: 1,
-                            ),
-                          ),
-
-                          SizedBox(height: 6),
-
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 9,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.22),
-                                  borderRadius: BorderRadius.circular(30),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.35),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      rankIcon,
-                                      color: rankLightColor,
-                                      size: 13,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      rankText,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w900,
-                                        height: 1,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              SizedBox(width: 8),
-
-                              Flexible(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 9,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.18),
-                                    borderRadius: BorderRadius.circular(30),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.26),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    isLoggedIn
-                                        ? '$customerPoints điểm'
-                                        : 'Đăng nhập nhận ưu đãi',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w900,
-                                      height: 1,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(width: 8),
-
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.22),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.32),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: rankDarkColor.withOpacity(0.28),
-                            blurRadius: 12,
-                            offset: Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.restaurant_menu_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeCardPatternPainter extends CustomPainter {
-  final Color color;
-  final bool isDark;
-
-  _HomeCardPatternPainter({
-    required this.color,
-    required this.isDark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final linePaint = Paint()
-      ..color = Colors.white.withOpacity(isDark ? 0.045 : 0.16)
-      ..strokeWidth = 1;
-
-    const gap = 18.0;
-
-    for (double x = -size.height; x < size.width; x += gap) {
-      canvas.drawLine(
-        Offset(x, size.height),
-        Offset(x + size.height, 0),
-        linePaint,
-      );
-    }
-
-    final dotPaint = Paint()
-      ..color = color.withOpacity(isDark ? 0.13 : 0.16)
-      ..style = PaintingStyle.fill;
-
-    for (double x = 0; x < size.width; x += 22) {
-      for (double y = 0; y < size.height; y += 22) {
-        canvas.drawCircle(
-          Offset(x, y),
-          1.2,
-          dotPaint,
-        );
-      }
-    }
-
-    final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          color.withOpacity(isDark ? 0.32 : 0.24),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(size.width * 0.76, size.height * 0.38),
-          radius: 92,
-        ),
-      );
-
-    canvas.drawCircle(
-      Offset(size.width * 0.76, size.height * 0.38),
-      92,
-      glowPaint,
-    );
-
-    final shinePaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withOpacity(0.34),
-          Colors.white.withOpacity(0.04),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-      );
-
-    final shinePath = Path()
-      ..moveTo(-20, 0)
-      ..lineTo(size.width * 0.40, 0)
-      ..lineTo(size.width * 0.16, size.height)
-      ..lineTo(-70, size.height)
-      ..close();
-
-    canvas.drawPath(shinePath, shinePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _HomeCardPatternPainter oldDelegate) {
-    return oldDelegate.color != color || oldDelegate.isDark != isDark;
+        oldDelegate.isLoggedIn != isLoggedIn ||
+        oldDelegate.rankData != rankData;
   }
 }
 
@@ -760,7 +319,7 @@ class _LocationTopBar extends StatelessWidget {
   final VoidCallback onLocationTap;
   final VoidCallback onNotificationTap;
 
-  _LocationTopBar({
+  const _LocationTopBar({
     required this.locationText,
     required this.onLocationTap,
     required this.onNotificationTap,
@@ -785,7 +344,7 @@ class _LocationTopBar extends StatelessWidget {
                     color: primary,
                     size: 21,
                   ),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       locationText,
@@ -798,7 +357,7 @@ class _LocationTopBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  SizedBox(width: 4),
+                  const SizedBox(width: 4),
                   Icon(
                     Icons.keyboard_arrow_down,
                     color: AppColors.textSecondary(context),
@@ -808,7 +367,7 @@ class _LocationTopBar extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           InkWell(
             borderRadius: BorderRadius.circular(50),
             onTap: onNotificationTap,
@@ -843,7 +402,7 @@ class _LocationTopBar extends StatelessWidget {
                         BoxShadow(
                           color: primary.withOpacity(0.35),
                           blurRadius: 6,
-                          offset: Offset(0, 2),
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
@@ -859,7 +418,7 @@ class _LocationTopBar extends StatelessWidget {
 }
 
 class _PromoBannerSlider extends ConsumerStatefulWidget {
-  _PromoBannerSlider();
+  const _PromoBannerSlider();
 
   @override
   ConsumerState<_PromoBannerSlider> createState() => _PromoBannerSliderState();
@@ -871,20 +430,24 @@ class _PromoBannerSliderState extends ConsumerState<_PromoBannerSlider> {
   Timer? timer;
 
   Color hexToColor(String hex) {
-    var value = hex.replaceAll('#', '');
+    var value = hex.replaceAll('#', '').trim();
 
     if (value.length == 6) {
       value = 'FF$value';
     }
 
-    return Color(int.parse(value, radix: 16));
+    try {
+      return Color(int.parse(value, radix: 16));
+    } catch (_) {
+      return const Color(0xFFFF7A00);
+    }
   }
 
   @override
   void initState() {
     super.initState();
 
-    timer = Timer.periodic(Duration(seconds: 4), (_) {
+    timer = Timer.periodic(const Duration(seconds: 4), (_) {
       final banners = ref.read(bannersProvider);
 
       if (!mounted || banners.isEmpty || !controller.hasClients) return;
@@ -894,7 +457,7 @@ class _PromoBannerSliderState extends ConsumerState<_PromoBannerSlider> {
 
       controller.animateToPage(
         nextIndex,
-        duration: Duration(milliseconds: 350),
+        duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
       );
     });
@@ -947,7 +510,7 @@ class _PromoBannerSliderState extends ConsumerState<_PromoBannerSlider> {
                     BoxShadow(
                       color: color.withOpacity(0.24),
                       blurRadius: 18,
-                      offset: Offset(0, 9),
+                      offset: const Offset(0, 9),
                     ),
                   ],
                 ),
@@ -962,7 +525,7 @@ class _PromoBannerSliderState extends ConsumerState<_PromoBannerSlider> {
                           color: Colors.black.withOpacity(0.30),
                           colorBlendMode: BlendMode.darken,
                           errorWidget: (_, __, ___) {
-                            return SizedBox.shrink();
+                            return const SizedBox.shrink();
                           },
                         ),
                       ),
@@ -987,21 +550,21 @@ class _PromoBannerSliderState extends ConsumerState<_PromoBannerSlider> {
                             title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 22,
                               fontWeight: FontWeight.w900,
                               height: 1.2,
                             ),
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           SizedBox(
                             width: 230,
                             child: Text(
                               subtitle,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -1009,7 +572,7 @@ class _PromoBannerSliderState extends ConsumerState<_PromoBannerSlider> {
                               ),
                             ),
                           ),
-                          Spacer(),
+                          const Spacer(),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 15,
@@ -1037,7 +600,7 @@ class _PromoBannerSliderState extends ConsumerState<_PromoBannerSlider> {
             },
           ),
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(
@@ -1046,7 +609,7 @@ class _PromoBannerSliderState extends ConsumerState<_PromoBannerSlider> {
               final isActive = currentIndex == index;
 
               return AnimatedContainer(
-                duration: Duration(milliseconds: 250),
+                duration: const Duration(milliseconds: 250),
                 margin: const EdgeInsets.symmetric(horizontal: 3),
                 width: isActive ? 24 : 8,
                 height: 8,
@@ -1068,7 +631,7 @@ class _PromoBannerSliderState extends ConsumerState<_PromoBannerSlider> {
 }
 
 class _BannerLoading extends StatelessWidget {
-  _BannerLoading();
+  const _BannerLoading();
 
   @override
   Widget build(BuildContext context) {
@@ -1095,7 +658,7 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final String actionText;
 
-  _SectionHeader({
+  const _SectionHeader({
     required this.title,
     required this.actionText,
   });
@@ -1114,7 +677,7 @@ class _SectionHeader extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          Spacer(),
+          const Spacer(),
           Text(
             actionText,
             style: TextStyle(
@@ -1130,7 +693,7 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _FoodFilterChips extends ConsumerWidget {
-  _FoodFilterChips();
+  const _FoodFilterChips();
 
   static const filters = [
     {
@@ -1166,7 +729,7 @@ class _FoodFilterChips extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
         itemCount: filters.length,
-        separatorBuilder: (_, __) => SizedBox(width: 10),
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final filter = filters[index];
           final title = filter['title'] as String;
@@ -1178,12 +741,10 @@ class _FoodFilterChips extends ConsumerWidget {
               ref.read(homeFilterProvider.notifier).selectFilter(title);
             },
             child: AnimatedContainer(
-              duration: Duration(milliseconds: 220),
+              duration: const Duration(milliseconds: 220),
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                gradient: isSelected
-                    ? AppColors.primaryGradient(context)
-                    : null,
+                gradient: isSelected ? AppColors.primaryGradient(context) : null,
                 color: isSelected ? null : AppColors.card(context),
                 borderRadius: BorderRadius.circular(30),
                 border: Border.all(
@@ -1195,7 +756,7 @@ class _FoodFilterChips extends ConsumerWidget {
                         ? primary.withOpacity(0.18)
                         : AppColors.shadow(context),
                     blurRadius: 10,
-                    offset: Offset(0, 4),
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -1206,7 +767,7 @@ class _FoodFilterChips extends ConsumerWidget {
                     size: 17,
                     color: isSelected ? Colors.white : primary,
                   ),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   Text(
                     title,
                     style: TextStyle(

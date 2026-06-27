@@ -1,25 +1,19 @@
-﻿import 'package:supabase_flutter/supabase_flutter.dart';
+import 'api_client.dart';
 
 class BannerService {
-  final supabase = Supabase.instance.client;
-
   Future<List<Map<String, dynamic>>> getBanners() async {
-    final data = await supabase
-        .from('banners')
-        .select()
-        .eq('is_active', true)
-        .order('id', ascending: true);
+    final data = await ApiClient.getList('/api/banners');
 
-    return List<Map<String, dynamic>>.from(data).map((item) {
+    return data.map((item) {
       return {
         'id': item['id'],
         'title': item['title']?.toString() ?? '',
         'subtitle': item['subtitle']?.toString() ?? '',
-        'imageUrl': item['image_url']?.toString() ?? '',
-        'colorHex': item['color_hex']?.toString() ?? '#FF7A00',
+        'imageUrl': item['imageUrl']?.toString() ?? item['image_url']?.toString() ?? '',
+        'image_url': item['image_url']?.toString() ?? item['imageUrl']?.toString() ?? '',
+        'colorHex': item['colorHex']?.toString() ?? item['color_hex']?.toString() ?? '#FF7A00',
+        'color_hex': item['color_hex']?.toString() ?? item['colorHex']?.toString() ?? '#FF7A00',
       };
     }).toList();
   }
 }
-
-

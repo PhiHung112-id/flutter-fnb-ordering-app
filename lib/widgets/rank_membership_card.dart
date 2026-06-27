@@ -10,6 +10,10 @@ class RankMembershipCard extends StatelessWidget {
   final String avatarUrl;
   final String firstLetter;
   final bool compact;
+
+  final Map<String, dynamic>? rankData;
+  final Map<String, dynamic>? nextRankData;
+
   final VoidCallback? onTap;
   final VoidCallback? onAvatarTap;
 
@@ -22,16 +26,309 @@ class RankMembershipCard extends StatelessWidget {
     required this.avatarUrl,
     required this.firstLetter,
     this.compact = false,
+    this.rankData,
+    this.nextRankData,
     this.onTap,
     this.onAvatarTap,
   });
 
+  int getIntValue(dynamic value, {int defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+
+    return int.tryParse(value.toString()) ?? defaultValue;
+  }
+
+  double getDoubleValue(dynamic value, {double defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
+
+    return double.tryParse(value.toString()) ?? defaultValue;
+  }
+
+  String getTextValue(String key, String fallback) {
+    final value = rankData?[key];
+
+    if (value == null) {
+      return fallback;
+    }
+
+    final text = value.toString().trim();
+
+    return text.isEmpty ? fallback : text;
+  }
+
+  Color colorFromHex(String? hex, Color fallback) {
+    if (hex == null || hex.trim().isEmpty) {
+      return fallback;
+    }
+
+    var value = hex.replaceAll('#', '').trim();
+
+    if (value.length == 6) {
+      value = 'FF$value';
+    }
+
+    try {
+      return Color(int.parse(value, radix: 16));
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  IconData getRankIconByKey(String? key, IconData fallback) {
+    final value = key?.toLowerCase().trim() ?? '';
+
+    switch (value) {
+      case 'diamond':
+        return Icons.diamond_rounded;
+
+      case 'workspace_premium':
+      case 'gold':
+        return Icons.workspace_premium_rounded;
+
+      case 'military_tech':
+      case 'silver':
+        return Icons.military_tech_rounded;
+
+      case 'local_cafe':
+      case 'bronze':
+      case 'member':
+        return Icons.local_cafe_rounded;
+
+      case 'star':
+        return Icons.star_rounded;
+
+      case 'crown':
+        return Icons.emoji_events_rounded;
+
+      case 'verified':
+        return Icons.verified_rounded;
+
+      default:
+        return fallback;
+    }
+  }
+
+  String getRankNameFromDb() {
+    return rankData?['name']?.toString() ?? rank;
+  }
+
+  String getRankCodeFromDb() {
+    return rankData?['code']?.toString() ?? rank;
+  }
+
+  String getBenefitText({
+    required RankStyle fallbackStyle,
+    required int discount,
+  }) {
+    final benefit = rankData?['benefit_text']?.toString().trim();
+
+    if (benefit != null && benefit.isNotEmpty) {
+      return benefit;
+    }
+
+    if (discount > 0) {
+      return 'Giảm $discount% mỗi đơn';
+    }
+
+    return fallbackStyle.benefitText;
+  }
+
+  RankStyle getRankStyleFromDb() {
+    final fallbackStyle = RankHelper.getStyle(getRankCodeFromDb());
+
+    final discount = getIntValue(
+      rankData?['discount_percent'],
+      defaultValue: fallbackStyle.discount,
+    );
+
+    final primary = colorFromHex(
+      rankData?['primary_color']?.toString(),
+      fallbackStyle.primary,
+    );
+
+    final secondary = colorFromHex(
+      rankData?['secondary_color']?.toString(),
+      colorFromHex(
+        rankData?['dark_color']?.toString(),
+        fallbackStyle.secondary,
+      ),
+    );
+
+    final textColor = colorFromHex(
+      rankData?['text_color']?.toString(),
+      fallbackStyle.textColor,
+    );
+
+    final lightColor = colorFromHex(
+      rankData?['light_color']?.toString(),
+      primary.withOpacity(0.75),
+    );
+
+    final darkColor = colorFromHex(
+      rankData?['dark_color']?.toString(),
+      secondary,
+    );
+
+    final gradientStart = colorFromHex(
+      rankData?['gradient_start']?.toString(),
+      fallbackStyle.gradient.colors.isNotEmpty
+          ? fallbackStyle.gradient.colors.first
+          : lightColor,
+    );
+
+    final gradientMiddle = colorFromHex(
+      rankData?['gradient_middle']?.toString(),
+      primary,
+    );
+
+    final gradientEnd = colorFromHex(
+      rankData?['gradient_end']?.toString(),
+      fallbackStyle.gradient.colors.isNotEmpty
+          ? fallbackStyle.gradient.colors.last
+          : darkColor,
+    );
+
+    return RankStyle(
+      rankName: getTextValue('name', fallbackStyle.rankName),
+      title: getTextValue('title', getTextValue('name', fallbackStyle.title)),
+      subtitle: getTextValue(
+        'subtitle',
+        getTextValue(
+          'description',
+          fallbackStyle.subtitle,
+        ),
+      ),
+      benefitText: getBenefitText(
+        fallbackStyle: fallbackStyle,
+        discount: discount,
+      ),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          gradientStart,
+          gradientMiddle,
+          gradientEnd,
+        ],
+      ),
+      primary: primary,
+      secondary: secondary,
+      shadow: primary,
+      textColor: textColor,
+      chipTextColor: fallbackStyle.chipTextColor,
+      icon: getRankIconByKey(
+        rankData?['icon_key']?.toString(),
+        fallbackStyle.icon,
+      ),
+      patternIcon: getRankIconByKey(
+        rankData?['icon_key']?.toString(),
+        fallbackStyle.patternIcon,
+      ),
+      minPoint: getIntValue(
+        rankData?['min_points'],
+        defaultValue: fallbackStyle.minPoint,
+      ),
+      maxPoint: getIntValue(
+        rankData?['max_points'],
+        defaultValue: fallbackStyle.maxPoint,
+      ),
+      discount: discount,
+    );
+  }
+
+  double getRankProgress() {
+    if (rankData == null) {
+      return RankHelper.getProgress(points);
+    }
+
+    final currentMin = getIntValue(rankData?['min_points']);
+    final nextMin = getIntValue(nextRankData?['min_points']);
+
+    if (nextRankData == null || nextMin <= currentMin) {
+      return 1.0;
+    }
+
+    final progress = (points - currentMin) / (nextMin - currentMin);
+
+    return progress.clamp(0.0, 1.0);
+  }
+
+  int getMissingPoints() {
+    if (nextRankData == null) {
+      return 0;
+    }
+
+    final nextMin = getIntValue(nextRankData?['min_points']);
+    final missing = nextMin - points;
+
+    return missing < 0 ? 0 : missing;
+  }
+
+  String getNextRankName() {
+    if (nextRankData == null) {
+      return 'MAX';
+    }
+
+    return nextRankData?['name']?.toString() ?? 'Hạng tiếp theo';
+  }
+
+  String getPointRangeText() {
+    if (rankData == null) {
+      return RankHelper.getPointRangeText(points);
+    }
+
+    if (nextRankData == null) {
+      return '$points điểm - MAX';
+    }
+
+    final nextMin = getIntValue(nextRankData?['min_points']);
+
+    return '$points / $nextMin điểm';
+  }
+
+  bool isMaxRank() {
+    return nextRankData == null;
+  }
+
+  bool isDiamondRank(String rankName) {
+    final value = rankName.toLowerCase().trim();
+
+    return value.contains('diamond') ||
+        value.contains('kim cương') ||
+        value.contains('kim cuong') ||
+        value == 'kc';
+  }
+
+  bool isGoldRank(String rankName) {
+    final value = rankName.toLowerCase().trim();
+
+    return value.contains('gold') ||
+        value.contains('vàng') ||
+        value.contains('vang');
+  }
+
+  bool isSilverRank(String rankName) {
+    final value = rankName.toLowerCase().trim();
+
+    return value.contains('silver') ||
+        value.contains('bạc') ||
+        value.contains('bac');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final rankStyle = RankHelper.getStyle(rank);
-    final progress = RankHelper.getProgress(points);
-    final nextRank = RankHelper.getNextRankName(points);
-    final missingPoints = RankHelper.getMissingPoints(points);
+    final rankStyle = getRankStyleFromDb();
+
+    final progress = getRankProgress();
+    final nextRank = getNextRankName();
+    final missingPoints = getMissingPoints();
+    final pointRangeText = getPointRangeText();
+    final maxRank = isMaxRank();
 
     return InkWell(
       onTap: onTap,
@@ -65,12 +362,13 @@ class RankMembershipCard extends StatelessWidget {
                   rankName: rankStyle.rankName,
                   icon: rankStyle.patternIcon,
                 ),
-
-                if (rankStyle.rankName == 'Diamond') _DiamondGameEffect(),
-                if (rankStyle.rankName == 'Gold') _GoldGameEffect(),
-                if (rankStyle.rankName == 'Silver') _SilverGameEffect(),
-                if (rankStyle.rankName == 'Member') _MemberGameEffect(),
-
+                if (isDiamondRank(rankStyle.rankName)) _DiamondGameEffect(),
+                if (isGoldRank(rankStyle.rankName)) _GoldGameEffect(),
+                if (isSilverRank(rankStyle.rankName)) _SilverGameEffect(),
+                if (!isDiamondRank(rankStyle.rankName) &&
+                    !isGoldRank(rankStyle.rankName) &&
+                    !isSilverRank(rankStyle.rankName))
+                  _MemberGameEffect(),
                 compact
                     ? _CompactGameContent(
                   rankStyle: rankStyle,
@@ -80,6 +378,7 @@ class RankMembershipCard extends StatelessWidget {
                   avatarUrl: avatarUrl,
                   firstLetter: firstLetter,
                   progress: progress,
+                  pointRangeText: pointRangeText,
                   onAvatarTap: onAvatarTap,
                 )
                     : _LargeGameContent(
@@ -92,6 +391,8 @@ class RankMembershipCard extends StatelessWidget {
                   progress: progress,
                   nextRank: nextRank,
                   missingPoints: missingPoints,
+                  pointRangeText: pointRangeText,
+                  isMaxRank: maxRank,
                   onAvatarTap: onAvatarTap,
                 ),
               ],
@@ -103,7 +404,11 @@ class RankMembershipCard extends StatelessWidget {
   }
 
   LinearGradient _rankBorderGradient(String rankName) {
-    if (rankName == 'Diamond') {
+    final value = rankName.toLowerCase().trim();
+
+    if (value.contains('diamond') ||
+        value.contains('kim cương') ||
+        value.contains('kim cuong')) {
       return LinearGradient(
         colors: [
           Color(0xFF7DD3FC),
@@ -114,7 +419,9 @@ class RankMembershipCard extends StatelessWidget {
       );
     }
 
-    if (rankName == 'Gold') {
+    if (value.contains('gold') ||
+        value.contains('vàng') ||
+        value.contains('vang')) {
       return LinearGradient(
         colors: [
           Color(0xFFFFF7AD),
@@ -125,7 +432,9 @@ class RankMembershipCard extends StatelessWidget {
       );
     }
 
-    if (rankName == 'Silver') {
+    if (value.contains('silver') ||
+        value.contains('bạc') ||
+        value.contains('bac')) {
       return LinearGradient(
         colors: [
           Color(0xFFFFFFFF),
@@ -138,10 +447,10 @@ class RankMembershipCard extends StatelessWidget {
 
     return LinearGradient(
       colors: [
-        Color(0xFF9CA3AF),
-        Color(0xFF374151),
-        Color(0xFF111827),
-        Color(0xFF6B7280),
+        Color(0xFFFFF1DB),
+        Color(0xFFFFC078),
+        Color(0xFFFF7A00),
+        Color(0xFFE85D04),
       ],
     );
   }
@@ -155,6 +464,7 @@ class _CompactGameContent extends StatelessWidget {
   final String avatarUrl;
   final String firstLetter;
   final double progress;
+  final String pointRangeText;
   final VoidCallback? onAvatarTap;
 
   _CompactGameContent({
@@ -165,6 +475,7 @@ class _CompactGameContent extends StatelessWidget {
     required this.avatarUrl,
     required this.firstLetter,
     required this.progress,
+    required this.pointRangeText,
     this.onAvatarTap,
   });
 
@@ -180,17 +491,13 @@ class _CompactGameContent extends StatelessWidget {
           size: 78,
           onAvatarTap: onAvatarTap,
         ),
-
         SizedBox(width: 14),
-
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _RankTitleBadge(rankStyle: rankStyle),
-
               SizedBox(height: 7),
-
               Text(
                 fullName,
                 maxLines: 1,
@@ -202,9 +509,7 @@ class _CompactGameContent extends StatelessWidget {
                   letterSpacing: -0.3,
                 ),
               ),
-
               SizedBox(height: 4),
-
               Text(
                 phoneOrEmail,
                 maxLines: 1,
@@ -215,21 +520,17 @@ class _CompactGameContent extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-
               SizedBox(height: 10),
-
               _ExpBar(
                 progress: progress,
                 rankColor: rankStyle.primary,
-                label: '$points EXP',
+                label: pointRangeText,
                 compact: true,
               ),
             ],
           ),
         ),
-
         SizedBox(width: 8),
-
         Container(
           width: 34,
           height: 34,
@@ -261,6 +562,8 @@ class _LargeGameContent extends StatelessWidget {
   final double progress;
   final String nextRank;
   final int missingPoints;
+  final String pointRangeText;
+  final bool isMaxRank;
   final VoidCallback? onAvatarTap;
 
   _LargeGameContent({
@@ -273,6 +576,8 @@ class _LargeGameContent extends StatelessWidget {
     required this.progress,
     required this.nextRank,
     required this.missingPoints,
+    required this.pointRangeText,
+    required this.isMaxRank,
     this.onAvatarTap,
   });
 
@@ -290,9 +595,7 @@ class _LargeGameContent extends StatelessWidget {
             ),
           ],
         ),
-
         SizedBox(height: 18),
-
         _GameAvatar(
           avatarUrl: avatarUrl,
           firstLetter: firstLetter,
@@ -301,9 +604,7 @@ class _LargeGameContent extends StatelessWidget {
           size: 134,
           onAvatarTap: onAvatarTap,
         ),
-
         SizedBox(height: 18),
-
         Text(
           fullName,
           maxLines: 1,
@@ -316,9 +617,7 @@ class _LargeGameContent extends StatelessWidget {
             letterSpacing: -0.4,
           ),
         ),
-
         SizedBox(height: 5),
-
         Text(
           phoneOrEmail,
           maxLines: 1,
@@ -329,9 +628,7 @@ class _LargeGameContent extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
-
         SizedBox(height: 8),
-
         Text(
           rankStyle.subtitle,
           maxLines: 1,
@@ -343,9 +640,7 @@ class _LargeGameContent extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-
         SizedBox(height: 18),
-
         Wrap(
           alignment: WrapAlignment.center,
           spacing: 9,
@@ -360,7 +655,7 @@ class _LargeGameContent extends StatelessWidget {
             ),
             _GameChip(
               icon: Icons.stars_rounded,
-              text: '$points EXP',
+              text: '$points điểm',
               rankColor: rankStyle.primary,
               filled: true,
               maxWidth: 135,
@@ -374,9 +669,7 @@ class _LargeGameContent extends StatelessWidget {
             ),
           ],
         ),
-
         SizedBox(height: 18),
-
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(14),
@@ -400,9 +693,9 @@ class _LargeGameContent extends StatelessWidget {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      points >= 2000
+                      isMaxRank
                           ? 'MAX LEVEL - Bạn đã đạt hạng cao nhất'
-                          : 'Cần $missingPoints EXP để lên $nextRank',
+                          : 'Cần $missingPoints điểm để lên $nextRank',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -414,13 +707,11 @@ class _LargeGameContent extends StatelessWidget {
                   ),
                 ],
               ),
-
               SizedBox(height: 12),
-
               _ExpBar(
                 progress: progress,
                 rankColor: rankStyle.primary,
-                label: RankHelper.getPointRangeText(points),
+                label: pointRangeText,
                 compact: false,
               ),
             ],
@@ -586,7 +877,6 @@ class _GameAvatar extends StatelessWidget {
               ],
             ),
           ),
-
           Container(
             width: innerSize,
             height: innerSize,
@@ -620,7 +910,6 @@ class _GameAvatar extends StatelessWidget {
               ),
             ),
           ),
-
           Positioned(
             bottom: 4,
             right: 4,
@@ -754,6 +1043,8 @@ class _ExpBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safeProgress = progress.clamp(0.0, 1.0);
+
     return Column(
       crossAxisAlignment:
       compact ? CrossAxisAlignment.start : CrossAxisAlignment.stretch,
@@ -789,7 +1080,7 @@ class _ExpBar extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(30),
             child: LinearProgressIndicator(
-              value: progress,
+              value: safeProgress,
               backgroundColor: Colors.transparent,
               valueColor: AlwaysStoppedAnimation<Color>(rankColor),
             ),
@@ -808,6 +1099,14 @@ class _GamePattern extends StatelessWidget {
     required this.rankName,
     required this.icon,
   });
+
+  bool isDiamondRank() {
+    final value = rankName.toLowerCase().trim();
+
+    return value.contains('diamond') ||
+        value.contains('kim cương') ||
+        value.contains('kim cuong');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -850,7 +1149,7 @@ class _GamePattern extends StatelessWidget {
               child: Icon(
                 icon,
                 color: Colors.white.withOpacity(0.10),
-                size: rankName == 'Diamond' ? 108 : 92,
+                size: isDiamondRank() ? 108 : 92,
               ),
             ),
           ],

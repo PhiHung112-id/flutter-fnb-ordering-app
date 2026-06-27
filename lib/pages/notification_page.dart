@@ -125,9 +125,9 @@ class _NotificationPageState extends State<NotificationPage> {
     final color = getNotificationColor(context, type);
     final icon = getNotificationIcon(iconName, type);
 
-    if (id is int && notification['is_read'] != true) {
+    if (id != null && id.toString().trim().isNotEmpty && notification['is_read'] != true) {
       try {
-        await NotificationService().markAsRead(id);
+        await NotificationService().markAsRead(id.toString());
         await refreshNotifications();
       } catch (_) {}
     }

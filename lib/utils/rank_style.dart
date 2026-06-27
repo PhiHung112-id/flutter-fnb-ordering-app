@@ -40,29 +40,33 @@ class RankStyle {
 }
 
 class RankHelper {
+  static String normalizeRank(String rank) {
+    return rank.toLowerCase().trim();
+  }
+
   static RankStyle getStyle(String rank) {
-    final value = rank.toLowerCase().trim();
+    final value = normalizeRank(rank);
 
     if (value == 'diamond' ||
         value == 'kim cương' ||
-        value == 'kc' ||
-        value == 'kim cuong') {
+        value == 'kim cuong' ||
+        value == 'kc') {
       return RankStyle(
         rankName: 'Diamond',
         title: 'Diamond Member',
-        subtitle: 'Khách hàng thân thiết cao cấp',
-        benefitText: 'Giảm 8% mỗi đơn',
-        primary: Color(0xFF38BDF8),
-        secondary: Color(0xFF0EA5E9),
-        shadow: Color(0xFF38BDF8),
+        subtitle: 'Khách hàng cao cấp nhất của Chill Bites',
+        benefitText: 'Giảm 10% mỗi đơn',
+        primary: const Color(0xFF38BDF8),
+        secondary: const Color(0xFF0EA5E9),
+        shadow: const Color(0xFF38BDF8),
         textColor: Colors.white,
-        chipTextColor: Color(0xFF075985),
+        chipTextColor: const Color(0xFF075985),
         icon: Icons.diamond_rounded,
         patternIcon: Icons.auto_awesome_rounded,
-        minPoint: 2000,
-        maxPoint: 2000,
-        discount: 8,
-        gradient: LinearGradient(
+        minPoint: 2500,
+        maxPoint: 999999,
+        discount: 10,
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
@@ -75,25 +79,23 @@ class RankHelper {
       );
     }
 
-    if (value == 'gold' ||
-        value == 'vàng' ||
-        value == 'vang') {
+    if (value == 'gold' || value == 'vàng' || value == 'vang') {
       return RankStyle(
         rankName: 'Gold',
         title: 'Gold Member',
-        subtitle: 'Khách hàng thân thiết hạng vàng',
+        subtitle: 'Khách hàng VIP với nhiều ưu đãi hơn',
         benefitText: 'Giảm 5% mỗi đơn',
-        primary: Color(0xFFFFD700),
-        secondary: Color(0xFFFFB300),
-        shadow: Color(0xFFFFC107),
+        primary: const Color(0xFFFFD700),
+        secondary: const Color(0xFFFFB300),
+        shadow: const Color(0xFFFFC107),
         textColor: Colors.white,
-        chipTextColor: Color(0xFF7A4D00),
+        chipTextColor: const Color(0xFF7A4D00),
         icon: Icons.workspace_premium_rounded,
         patternIcon: Icons.stars_rounded,
-        minPoint: 1000,
-        maxPoint: 1999,
+        minPoint: 1500,
+        maxPoint: 2499,
         discount: 5,
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
@@ -106,25 +108,23 @@ class RankHelper {
       );
     }
 
-    if (value == 'silver' ||
-        value == 'bạc' ||
-        value == 'bac') {
+    if (value == 'silver' || value == 'bạc' || value == 'bac') {
       return RankStyle(
         rankName: 'Silver',
         title: 'Silver Member',
         subtitle: 'Khách hàng thân thiết hạng bạc',
         benefitText: 'Giảm 3% mỗi đơn',
-        primary: Color(0xFFE5E7EB),
-        secondary: Color(0xFF9CA3AF),
-        shadow: Color(0xFFD1D5DB),
+        primary: const Color(0xFFE5E7EB),
+        secondary: const Color(0xFF9CA3AF),
+        shadow: const Color(0xFFD1D5DB),
         textColor: Colors.white,
-        chipTextColor: Color(0xFF374151),
+        chipTextColor: const Color(0xFF374151),
         icon: Icons.military_tech_rounded,
         patternIcon: Icons.shield_rounded,
         minPoint: 500,
-        maxPoint: 999,
+        maxPoint: 1499,
         discount: 3,
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
@@ -140,34 +140,34 @@ class RankHelper {
     return RankStyle(
       rankName: 'Member',
       title: 'Member',
-      subtitle: 'Thành viên cơ bản',
+      subtitle: 'Starter Reward Member',
       benefitText: 'Tích điểm nhận ưu đãi',
-      primary: Color(0xFF9CA3AF),
-      secondary: Color(0xFF6B7280),
-      shadow: Color(0xFF4B5563),
+      primary: const Color(0xFFFF7A00),
+      secondary: const Color(0xFFFFA726),
+      shadow: const Color(0xFFFF7A00),
       textColor: Colors.white,
-      chipTextColor: Color(0xFF1F2937),
-      icon: Icons.person_rounded,
-      patternIcon: Icons.local_cafe_rounded,
+      chipTextColor: const Color(0xFF7C2D12),
+      icon: Icons.local_cafe_rounded,
+      patternIcon: Icons.restaurant_menu_rounded,
       minPoint: 0,
       maxPoint: 499,
       discount: 0,
-      gradient: LinearGradient(
+      gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Color(0xFF111827),
-          Color(0xFF1F2937),
-          Color(0xFF374151),
-          Color(0xFF6B7280),
+          Color(0xFFFFB15C),
+          Color(0xFFFF8A1F),
+          Color(0xFFFF7A00),
+          Color(0xFFE85D04),
         ],
       ),
     );
   }
 
   static String getRankByPoints(int points) {
-    if (points >= 2000) return 'Diamond';
-    if (points >= 1000) return 'Gold';
+    if (points >= 2500) return 'Diamond';
+    if (points >= 1500) return 'Gold';
     if (points >= 500) return 'Silver';
     return 'Member';
   }
@@ -177,81 +177,91 @@ class RankHelper {
   }
 
   static int getCurrentRankStart(int points) {
-    if (points >= 2000) return 2000;
-    if (points >= 1000) return 1000;
+    if (points >= 2500) return 2500;
+    if (points >= 1500) return 1500;
     if (points >= 500) return 500;
     return 0;
   }
 
   static int getNextRankPoint(int points) {
-    if (points >= 2000) return 2000;
-    if (points >= 1000) return 2000;
-    if (points >= 500) return 1000;
+    if (points >= 2500) return 2500;
+    if (points >= 1500) return 2500;
+    if (points >= 500) return 1500;
     return 500;
   }
 
   static String getNextRankName(int points) {
-    if (points >= 2000) return 'Diamond';
-    if (points >= 1000) return 'Diamond';
+    if (points >= 2500) return 'Diamond';
+    if (points >= 1500) return 'Diamond';
     if (points >= 500) return 'Gold';
     return 'Silver';
   }
 
   static int getNextRankDiscount(int points) {
-    if (points >= 2000) return 8;
-    if (points >= 1000) return 8;
+    if (points >= 2500) return 10;
+    if (points >= 1500) return 10;
     if (points >= 500) return 5;
     return 3;
   }
 
   static int getMissingPoints(int points) {
-    if (points >= 2000) return 0;
-    return getNextRankPoint(points) - points;
+    if (points >= 2500) return 0;
+
+    final missing = getNextRankPoint(points) - points;
+
+    return missing < 0 ? 0 : missing;
   }
 
   static double getProgress(int points) {
-    if (points >= 2000) return 1;
+    if (points <= 0) return 0.0;
+    if (points >= 2500) return 1.0;
 
     final start = getCurrentRankStart(points);
     final next = getNextRankPoint(points);
 
-    if (next == start) return 1;
+    if (next <= start) return 1.0;
 
     final progress = (points - start) / (next - start);
+
     return progress.clamp(0.0, 1.0);
   }
 
   static String getPointRangeText(int points) {
-    if (points >= 2000) {
-      return '2000+ điểm';
+    if (points >= 2500) {
+      return '$points điểm - MAX';
     }
 
-    final start = getCurrentRankStart(points);
     final next = getNextRankPoint(points);
 
-    return '$start / $next điểm';
+    return '$points / $next điểm';
+  }
+
+  static String getProgressPercentText(int points) {
+    final percent = (getProgress(points) * 100).round();
+
+    return '$percent%';
   }
 
   static String getRankVietnameseName(String rank) {
-    final value = rank.toLowerCase().trim();
+    final value = normalizeRank(rank);
 
     if (value == 'diamond' ||
         value == 'kim cương' ||
-        value == 'kc' ||
-        value == 'kim cuong') {
+        value == 'kim cuong' ||
+        value == 'kc') {
       return 'Kim cương';
     }
 
-    if (value == 'gold' ||
-        value == 'vàng' ||
-        value == 'vang') {
+    if (value == 'gold' || value == 'vàng' || value == 'vang') {
       return 'Vàng';
     }
 
-    if (value == 'silver' ||
-        value == 'bạc' ||
-        value == 'bac') {
+    if (value == 'silver' || value == 'bạc' || value == 'bac') {
       return 'Bạc';
+    }
+
+    if (value == 'bronze' || value == 'đồng' || value == 'dong') {
+      return 'Đồng';
     }
 
     return 'Thành viên';

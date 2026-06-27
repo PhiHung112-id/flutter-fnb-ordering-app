@@ -1,19 +1,15 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../utils/rank_style.dart';
+import 'api_client.dart';
 
 class AuthService {
-  final supabase = Supabase.instance.client;
+  final SupabaseClient supabase = Supabase.instance.client;
 
   User? get currentUser => supabase.auth.currentUser;
 
   bool get isLoggedIn => currentUser != null;
-
-  int calculateEarnedPoints(double total) {
-    return (total / 10000).floor();
-  }
 
   Future<void> signUp({
     required String email,
@@ -32,16 +28,15 @@ class AuthService {
       throw Exception('Không tạo được tài khoản');
     }
 
-    await supabase.from('customers').insert({
-      'id': user.id,
-      'full_name': fullName.trim(),
-      'phone': phone.trim(),
-      'avatar_url': null,
-      'points': 0,
-      'rank': 'Member',
-      'rank_discount': 0,
-      'is_admin': false,
-    });
+    await ApiClient.post(
+      '/api/customers/upsert',
+      body: {
+        'id': user.id,
+        'email': email.trim(),
+        'fullName': fullName.trim(),
+        'phone': phone.trim(),
+      },
+    );
   }
 
   Future<void> signIn({
@@ -52,6 +47,19 @@ class AuthService {
       email: email.trim(),
       password: password.trim(),
     );
+
+    final user = currentUser;
+    if (user != null) {
+      await ApiClient.post(
+        '/api/customers/upsert',
+        body: {
+          'id': user.id,
+          'email': user.email ?? email.trim(),
+          'fullName': user.userMetadata?['full_name']?.toString() ?? '',
+          'phone': user.phone ?? '',
+        },
+      );
+    }
   }
 
   Future<void> signOut() async {
@@ -114,15 +122,27 @@ class AuthService {
   Future<Map<String, dynamic>?> getProfile() async {
     final user = currentUser;
 
-    if (user == null) return null;
+    if (user == null) {
+      return null;
+    }
 
-    final data = await supabase
-        .from('customers')
-        .select()
-        .eq('id', user.id)
-        .maybeSingle();
+    final profile = await ApiClient.getMap('/api/customers/${user.id}/profile');
 
-    return data;
+    if (profile == null) return null;
+
+    profile['email'] = profile['email']?.toString().trim().isNotEmpty == true
+        ? profile['email']
+        : user.email ?? '';
+
+    return profile;
+  }
+
+  int getIntValue(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+
+    return int.tryParse(value.toString()) ?? 0;
   }
 
   Future<String> uploadAvatar({
@@ -147,12 +167,14 @@ class AuthService {
     );
 
     final publicUrl = supabase.storage.from('avatars').getPublicUrl(fileName);
-
     final avatarUrl = '$publicUrl?v=${DateTime.now().millisecondsSinceEpoch}';
 
-    await supabase.from('customers').update({
-      'avatar_url': avatarUrl,
-    }).eq('id', user.id);
+    await ApiClient.patch(
+      '/api/customers/${user.id}/profile',
+      body: {
+        'avatarUrl': avatarUrl,
+      },
+    );
 
     return avatarUrl;
   }
@@ -167,44 +189,70 @@ class AuthService {
       throw Exception('Bạn cần đăng nhập để cập nhật hồ sơ');
     }
 
-    await supabase.from('customers').update({
-      'full_name': fullName.trim(),
-      'phone': phone.trim(),
-    }).eq('id', user.id);
+    await ApiClient.patch(
+      '/api/customers/${user.id}/profile',
+      body: {
+        'fullName': fullName.trim(),
+        'phone': phone.trim(),
+      },
+    );
   }
 
-  Future<int> addCustomerPoints(double orderTotal) async {
+  Future<Map<String, dynamic>?> getFaceRegistration() async {
     final user = currentUser;
 
     if (user == null) {
-      throw Exception('Bạn cần đăng nhập để cộng điểm');
+      return null;
     }
 
-    final earnedPoints = calculateEarnedPoints(orderTotal);
+    return ApiClient.getMap('/api/customers/${user.id}/face');
+  }
 
-    if (earnedPoints <= 0) {
-      return 0;
+  Future<String> registerFace({
+    required String filePath,
+  }) async {
+    final user = currentUser;
+
+    if (user == null) {
+      throw Exception('Bạn cần đăng nhập để đăng ký khuôn mặt');
     }
 
-    final customer = await supabase
-        .from('customers')
-        .select('points')
-        .eq('id', user.id)
-        .maybeSingle();
+    final extension = filePath.split('.').last.toLowerCase();
+    final safeExtension = extension.isEmpty ? 'jpg' : extension;
+    final fileName =
+        '${user.id}/face_${DateTime.now().millisecondsSinceEpoch}.$safeExtension';
 
-    final currentPoints = (customer?['points'] as num?)?.toInt() ?? 0;
-    final newPoints = currentPoints + earnedPoints;
+    await supabase.storage.from('avatars').upload(
+      fileName,
+      File(filePath),
+      fileOptions: const FileOptions(
+        upsert: true,
+      ),
+    );
 
-    final newRank = RankHelper.getRankByPoints(newPoints);
-    final newDiscount = RankHelper.getDiscountByRank(newRank);
+    final publicUrl = supabase.storage.from('avatars').getPublicUrl(fileName);
+    final faceUrl = '$publicUrl?v=${DateTime.now().millisecondsSinceEpoch}';
 
-    await supabase.from('customers').update({
-      'points': newPoints,
-      'rank': newRank,
-      'rank_discount': newDiscount,
-    }).eq('id', user.id);
+    await ApiClient.post(
+      '/api/customers/${user.id}/face',
+      body: {
+        'faceImageUrl': faceUrl,
+        'captureType': 'front',
+        'method': 'camera',
+      },
+    );
 
-    return earnedPoints;
+    return faceUrl;
+  }
+
+  Future<void> deleteRegisteredFace() async {
+    final user = currentUser;
+
+    if (user == null) {
+      throw Exception('Bạn cần đăng nhập để xóa khuôn mặt');
+    }
+
+    await ApiClient.delete('/api/customers/${user.id}/face');
   }
 
   String getCurrentEmail() {
